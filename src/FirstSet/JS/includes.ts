@@ -1,5 +1,4 @@
 // stwórz funkcję, która działa podobnie do array.includes(element)
-
 function includes(array: any[] = [], callbackForEachElement: (element: any) => boolean): boolean {
     for (let element of array) {
         if (callbackForEachElement(element)) return true;
@@ -24,7 +23,7 @@ const testArray = [
 ];
 
 function testCallback(element: any) {
-    return element === '4';
+    return element === 4;
 }
 
 console.log(includes(testArray, testCallback));

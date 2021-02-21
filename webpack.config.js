@@ -1,25 +1,28 @@
+// const TerserPlugin = require('terser-webpack-plugin');
+// const ChunksWebpackPlugin = require('chunks-webpack-plugin');
+// const ScriptExtHtmlPlugin = require('script-ext-html-webpack-plugin');
+
+// const CopyPlugin = require('copy-webpack-plugin');
+// const nodeExternals = require('webpack-node-externals');
+
+const VERSION = require('./package.json').version;
 const path = require('path');
 const webpack = require('webpack');
 
 const NodemonPlugin = require('nodemon-webpack-plugin');
+const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
+const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
-const TerserPlugin = require('terser-webpack-plugin');
+const FriendlyErrorsWebpackPlugin = require('friendly-errors-webpack-plugin');
+
+const HtmlPlugin = require('html-webpack-plugin');
+const CrittersPlugin = require('critters-webpack-plugin');
+const StyleLintPlugin = require('stylelint-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 
-const HtmlPlugin = require('html-webpack-plugin');
-const ScriptExtHtmlPlugin = require('script-ext-html-webpack-plugin');
-
-const CopyPlugin = require('copy-webpack-plugin');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
-const CrittersPlugin = require('critters-webpack-plugin');
-const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
-const FriendlyErrorsWebpackPlugin = require('friendly-errors-webpack-plugin');
-const nodeExternals = require('webpack-node-externals');
-const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
-const StyleLintPlugin = require('stylelint-webpack-plugin');
-
-const VERSION = require('./package.json').version;
 
 module.exports = async function (_, env) {
     const isProd = env && env.mode === 'production';
@@ -27,22 +30,18 @@ module.exports = async function (_, env) {
 
     return {
         mode: isProd ? 'production' : 'development',
-        // Turn off various NodeJS environment polyfills Webpack adds to bundles.
-        node: {
-            console: false,
-            // Keep global, it's just an alias of window and used by many third party modules:
-            global: true,
-            // Turn off process to avoid bundling a nextTick implementation:
-            process: false,
-            // Inline __filename and __dirname values:
-            __filename: 'mock',
-            __dirname: 'mock',
-            // Never embed a portable implementation of Node's Buffer module:
-            Buffer: false,
-            // Never embed a setImmediate implementation:
-            setImmediate: false
+        entry: path.resolve(__dirname, 'src', 'index.ts'),
+        devtool: isProd ? 'source-map' : 'inline-cheap-module-source-map',
+        stats: 'minimal',
+        target: 'node',
+        output: {
+            filename: 'main.js',
+            path: path.resolve(__dirname, 'dist'),
+            publicPath: '/',
+            globalObject: 'this',
+            devtoolModuleFilenameTemplate: '[absolute-resource-path]',
+            devtoolFallbackModuleFilenameTemplate: '[absolute-resource-path]?[hash]'
         },
-        externals: [isTest && nodeExternals()].filter(Boolean),
         devServer: {
             // Any unmatched request paths will serve static files from src/*:
             contentBase: path.join(__dirname, 'src'),
@@ -52,34 +51,18 @@ module.exports = async function (_, env) {
             // Suppress forwarding of Webpack logs to the browser console:
             clientLogLevel: 'none',
             // Supress the extensive stats normally printed after a dev build (since sizes are mostly useless):
-            stats: 'minimal',
+            stats: 'verbose',
             // Don't embed an error overlay ("redbox") into the client bundle:
             overlay: false
         },
-        entry: {
-            app: './src/index.ts'
-        },
-        devtool: isProd ? 'source-map' : 'inline-cheap-module-source-map',
-        stats: 'minimal',
-        output: {
-            filename: isProd ? 'js/[name].[chunkhash:5].js' : '[name].js',
-            chunkFilename: 'js/[name].[chunkhash:5].js',
-            path: path.join(__dirname, 'dist'),
-            publicPath: '/',
-            globalObject: 'self',
-            devtoolModuleFilenameTemplate: '[absolute-resource-path]',
-            devtoolFallbackModuleFilenameTemplate: '[absolute-resource-path]?[hash]'
-        },
         resolve: {
-            extensions: ['.ts', '.tsx', '.jsx', '.js', '.css', '.scss'],
+            extensions: ['.ts', '.tsx', '.jsx', '.js'],
 
             plugins: [
                 new TsconfigPathsPlugin({ configFile: "./tsconfig.json" })
             ].filter(Boolean)
         },
         module: {
-            // Disable the default JavaScript handling:
-            defaultRules: [],
             rules: [
                 {
                     oneOf: [
@@ -111,6 +94,27 @@ module.exports = async function (_, env) {
                     ]
                 },
                 {
+                    test: /\.tsx?$/,
+                    use: [
+                        {
+                            loader: 'thread-loader'
+                        },
+                        {
+                            loader: 'babel-loader'
+                        },
+                        {
+                            loader: 'ts-loader',
+                            options: {
+                                transpileOnly: true,
+                                happyPackMode: true
+                            }
+                        },
+
+                    ],
+
+                    exclude: /node_modules/,
+                },
+                {
                     test: /\.(scss|sass|css)$/,
                     use: [
                         // In production, CSS is extracted to files on disk. In development, it's inlined into JS:
@@ -136,47 +140,6 @@ module.exports = async function (_, env) {
                             }
                         }
                     ]
-                },
-                {
-                    test: /\.tsx?$/,
-                    use: [
-                        {
-                            loader: 'cache-loader',
-                        },
-                        {
-                            loader: 'thread-loader'
-                        },
-                        {
-                            loader: 'babel-loader'
-                        },
-                        {
-                            loader: 'ts-loader',
-                            options: {
-                                transpileOnly: true,
-                                happyPackMode: true
-                            }
-                        },
-                        isProd && {
-                            loader: 'eslint-loader'
-                        }
-                    ].filter(Boolean)
-                },
-                {
-                    test: /\.jsx?$/,
-                    use: [
-                        {
-                            loader: 'cache-loader',
-                        },
-                        {
-                            loader: 'thread-loader'
-                        },
-                        {
-                            loader: 'babel-loader'
-                        },
-                        isProd && {
-                            loader: 'eslint-loader'
-                        }
-                    ].filter(Boolean)
                 },
                 {
                     test: /\.(png|jpe?g|gif|webp)(\?.*)?$/,
@@ -237,43 +200,39 @@ module.exports = async function (_, env) {
                         }
                     ]
                 },
-            ]
+
+            ],
         },
         plugins: [
-
-
             new FriendlyErrorsWebpackPlugin(),
-
             // Remove old files before outputting a production build:
-            isProd && new CleanWebpackPlugin({
-                verbose: false,
-            }),
+            new CleanWebpackPlugin({ cleanStaleWebpackAssets: false }), // To do konfiguracji w zaleznosci co jest uruchamiane
+            // add nodemon on webpack --watch
+            new NodemonPlugin(),
 
-            // Automatically split code into async chunks.
-            // See: https://medium.com/webpack/webpack-4-code-splitting-chunk-graph-and-the-splitchunks-optimization-be739a861366
             isProd && new webpack.optimize.SplitChunksPlugin({}),
 
-            // In production, extract all CSS to produce files on disk, even for
-            // lazy-loaded CSS chunks. CSS for async chunks is loaded on-demand.
-            // This is a modern Webpack 4 replacement for ExtractTextPlugin.
-            // See: https://github.com/webpack-contrib/mini-css-extract-plugin
-            // See also: https://twitter.com/wsokra/status/970253245733113856
-            isProd && new MiniCssExtractPlugin({
-                filename: 'css/[name].[contenthash:5].css',
-                chunkFilename: 'css/[name].[contenthash:5].css'
+            new ForkTsCheckerWebpackPlugin({
+                typescript: {
+                    diagnosticOptions: {
+                        semantic: true,
+                        syntactic: true,
+                    },
+                },
             }),
 
-            new OptimizeCssAssetsPlugin({
-                cssProcessorOptions: {
-                    postcssReduceIdents: {
-                        counterStyle: false,
-                        gridTemplate: false,
-                        keyframes: false
-                    }
-                }
+            new webpack.DefinePlugin({
+                VERSION: JSON.stringify(VERSION),
+                // We set node.process=false later in this config.
+                // Here we make sure if (process && process.foo) still works:
+                process: JSON.stringify({
+                    NODE_ENV: '"production"',
+                    APP_BASE_URL: '"http://127.0.0.1:8080"',
+                    APP_SERVER: '"http://127.0.0.1:3001"',
+                    BASE_URL: '"/"'
+                })
             }),
 
-            // For now we're not doing SSR.
             new HtmlPlugin({
                 filename: path.join(__dirname, 'dist/index.html'),
                 template: 'public/index.html',
@@ -290,31 +249,9 @@ module.exports = async function (_, env) {
                 compile: true
             }),
 
-            // Inline constants during build, so they can be folded by UglifyJS.
-            new webpack.DefinePlugin({
-                VERSION: JSON.stringify(VERSION),
-                // We set node.process=false later in this config.
-                // Here we make sure if (process && process.foo) still works:
-                process: JSON.stringify({
-                    NODE_ENV: '"production"',
-                    APP_BASE_URL: '"http://127.0.0.1:8080"',
-                    APP_SERVER: '"http://127.0.0.1:3001"',
-                    BASE_URL: '"/"'
-                })
-            }),
-
-            new NodemonPlugin(),
-
-            // Copy static assets
-            new CopyPlugin([
-                { from: 'public', to: './' },
-            ]),
-
-            // For production builds, output module size analysis to build/report.html
-            isProd && new BundleAnalyzerPlugin({
-                analyzerMode: 'static',
-                defaultSizes: 'gzip',
-                openAnalyzer: false
+            isProd && new MiniCssExtractPlugin({
+                filename: 'css/[name].[contenthash:5].css',
+                chunkFilename: 'css/[name].[contenthash:5].css'
             }),
 
             // Inline Critical CSS
@@ -333,56 +270,25 @@ module.exports = async function (_, env) {
                 preloadFonts: false
             }),
 
-            new ForkTsCheckerWebpackPlugin(
-                {
-                    tslint: false,
-                    formatter: 'codeframe',
-                    checkSyntacticErrors: false
+            new OptimizeCssAssetsPlugin({
+                cssProcessorOptions: {
+                    postcssReduceIdents: {
+                        counterStyle: false,
+                        gridTemplate: false,
+                        keyframes: false
+                    }
                 }
-            ),
+            }),
 
             isProd && new StyleLintPlugin({
                 files: ['src/**/*.{htm,html,css,sss,less,scss,sass}'],
-            })
-        ].filter(Boolean), // Filter out any falsey plugin array entries.
+            }),
 
-        optimization: {
-            splitChunks: {
-                cacheGroups: {
-                    vendors: {
-                        name: 'chunk-vendors',
-                        test: /[\\/]node_modules[\\/]/,
-                        priority: -10,
-                        chunks: 'initial'
-                    },
-                    common: {
-                        name: 'chunk-common',
-                        minChunks: 2,
-                        priority: -20,
-                        chunks: 'initial',
-                        reuseExistingChunk: true
-                    }
-                }
-            },
-            minimizer: [
-                new TerserPlugin({
-                    sourceMap: isProd,
-                    extractComments: 'dist/licenses.txt',
-                    cache: true,
-                    parallel: true,
-                    terserOptions: {
-                        compress: {
-                            inline: 1
-                        },
-                        mangle: {
-                            safari10: true
-                        },
-                        output: {
-                            safari10: true
-                        }
-                    }
-                })
-            ]
-        },
+            isProd && new BundleAnalyzerPlugin({
+                analyzerMode: 'static',
+                defaultSizes: 'gzip',
+                openAnalyzer: false
+            }),
+        ].filter(Boolean),
     };
 };

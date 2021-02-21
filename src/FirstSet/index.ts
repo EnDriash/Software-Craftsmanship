@@ -1,2 +1,2 @@
-// require('./JS/includes.ts');
-require('./JS/pagination.ts');
+// import './JS/includes';
+import './JS/pagination';
